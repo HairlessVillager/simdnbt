@@ -27,22 +27,22 @@ fn is_plain_ascii(slice: &[u8]) -> bool {
     let ptr = slice.as_ptr();
     let mut offset = 0;
 
-    // 32 bytes per iteration — unrolled to guide auto-vectorization.
+    // Process 32 bytes at a time with a [u64; 4] load.
+    // LLVM compiles this to 4 u64 loads + a reduction tree, which the
+    // backend often merges into SIMD despite lacking portable_simd.
     while offset + 32 <= len {
         let chunk = unsafe { ptr.add(offset).cast::<[u64; 4]>().read_unaligned() };
-        if chunk[0] & 0x8080808080808080 != 0
-            || chunk[1] & 0x8080808080808080 != 0
-            || chunk[2] & 0x8080808080808080 != 0
-            || chunk[3] & 0x8080808080808080 != 0
-        {
+        // Bitwise OR all four u64 together — single comparison avoids
+        // short-circuit branches that inhibit vectorization.
+        if (chunk[0] | chunk[1] | chunk[2] | chunk[3]) & 0x8080808080808080 != 0 {
             return false;
         }
         offset += 32;
     }
     // 8-byte tail.
     while offset + 8 <= len {
-        let chunk = unsafe { ptr.add(offset).cast::<u64>().read_unaligned() };
-        if chunk & 0x8080808080808080 != 0 {
+        let word = unsafe { ptr.add(offset).cast::<u64>().read_unaligned() };
+        if word & 0x8080808080808080 != 0 {
             return false;
         }
         offset += 8;

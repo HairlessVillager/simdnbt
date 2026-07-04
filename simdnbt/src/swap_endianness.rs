@@ -1,6 +1,9 @@
 use std::mem;
 
-// ponytail: plain loops, LLVM auto-vectorizes these better than manual SIMD
+// Plain loops — LLVM on Linux auto-vectorizes these better than manual SIMD
+// swizzles. For swap_endianness specifically, chunks_exact_mut gives the
+// compiler a clean loop with known iteration bounds, which the loop
+// vectorizer handles well on both x86-64 and AArch64.
 
 mod private {
     pub trait Sealed {}
